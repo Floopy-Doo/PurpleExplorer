@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json;
-using ReactiveUI;
+﻿using ReactiveUI;
 using System;
 using System.IO;
 using System.Reactive;
@@ -7,13 +6,15 @@ using System.Reactive.Linq;
 
 namespace PurpleExplorer.Services;
 
+using System.Text.Json;
+using Models;
+
 public class NewtonsoftJsonSuspensionDriver : ISuspensionDriver
 {
     private readonly string _file;
-    private readonly JsonSerializerSettings _settings = new JsonSerializerSettings
+    private readonly JsonSerializerOptions _settings = new JsonSerializerOptions()
     {
-        TypeNameHandling = TypeNameHandling.All,
-        Formatting = Formatting.Indented
+        WriteIndented = true,
     };
 
     public NewtonsoftJsonSuspensionDriver(string file) => _file = file;
@@ -28,13 +29,13 @@ public class NewtonsoftJsonSuspensionDriver : ISuspensionDriver
     public IObservable<object> LoadState()
     {
         var lines = File.ReadAllText(_file);
-        var state = JsonConvert.DeserializeObject<object>(lines, _settings);
+        var state = JsonSerializer.Deserialize<AppState>(lines, _settings);
         return Observable.Return(state);
     }
 
     public IObservable<Unit> SaveState(object state)
     {
-        var lines = JsonConvert.SerializeObject(state, _settings);
+        var lines = JsonSerializer.Serialize(state, _settings);
         File.WriteAllText(_file, lines);
         return Observable.Return(Unit.Default);
     }

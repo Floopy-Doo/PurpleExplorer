@@ -9,12 +9,13 @@ using PurpleExplorer.Views;
 using ReactiveUI;
 using System.Threading.Tasks;
 using MessageBox.Avalonia.Enums;
-using Microsoft.Azure.ServiceBus;
 using PurpleExplorer.Services;
 using Splat;
 using Message = PurpleExplorer.Models.Message;
 
 namespace PurpleExplorer.ViewModels;
+
+using Azure.Messaging.ServiceBus;
 
 public class MainWindowViewModel : ViewModelBase
 {
@@ -192,7 +193,7 @@ public class MainWindowViewModel : ViewModelBase
             var serviceBusResource = new ServiceBusResource
             {
                 Name = namespaceInfo.Name,
-                CreatedTime = namespaceInfo.CreatedTime,
+                CreatedTime = namespaceInfo.CreatedTime.UtcDateTime,
                 ConnectionString = ConnectionString
             };
 
@@ -203,12 +204,12 @@ public class MainWindowViewModel : ViewModelBase
         }
         catch (ArgumentException)
         {
-            await MessageBoxHelper.ShowError("The connection string is invalid.");
+            await MessageBoxHelper.ShowError("The connection string is invalid.\n{ex}");
             LoggingService.Log("Connection failed: The connection string is invalid");
         }
-        catch (UnauthorizedException)
+        catch (UnauthorizedAccessException ex)
         {
-            await MessageBoxHelper.ShowError("Unable to connect to Service Bus; unauthorized.");
+            await MessageBoxHelper.ShowError($"Unable to connect to Service Bus; unauthorized.\n{ex}");
             LoggingService.Log("Connection failed: Unauthorized");
         }
         catch (ServiceBusException ex)

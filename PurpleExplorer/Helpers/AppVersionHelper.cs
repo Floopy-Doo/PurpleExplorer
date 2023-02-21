@@ -1,9 +1,11 @@
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 
 namespace PurpleExplorer.Helpers;
+
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 public static class AppVersionHelper
 {
@@ -15,23 +17,23 @@ public static class AppVersionHelper
             await httpClient.GetAsync(
                 "https://api.github.com/repos/telstrapurple/PurpleExplorer/releases/latest");
         var content = await response.Content.ReadAsStringAsync();
-        var githubRelease = JsonConvert.DeserializeObject<GithubRelease>(content);
+        var githubRelease = JsonSerializer.Deserialize<GithubRelease>(content);
         return githubRelease;
     }
 }
 
 public class GithubRelease
 {
-    [JsonProperty("id")]
+    [JsonPropertyName("id")]
     public int Id { get; set; }
-    [JsonProperty("url")]
+    [JsonPropertyName("url")]
     public string Url { get; set; }
-    [JsonProperty("html_url")]
+    [JsonPropertyName("html_url")]
     public string HtmlUrl { get; set; }
-    [JsonProperty("name")]
+    [JsonPropertyName("name")]
     public string Name { get; set; }
-    [JsonProperty("created_at")]
+    [JsonPropertyName("created_at")]
     public DateTime CreatedAt { get; set; }
-    [JsonProperty("published_at")]
+    [JsonPropertyName("published_at")]
     public DateTime PublishedAt { get; set; } 
 }

@@ -2,15 +2,16 @@
 using System.Threading.Tasks;
 using PurpleExplorer.Models;
 using Message = PurpleExplorer.Models.Message;
-using AzureMessage = Microsoft.Azure.ServiceBus.Message;
 
 namespace PurpleExplorer.Helpers;
+
+using Azure.Messaging.ServiceBus;
 
 public interface IQueueHelper
 {
     Task<IList<ServiceBusQueue>> GetQueues(ServiceBusConnectionString connectionString);
     public Task SendMessage(ServiceBusConnectionString connectionString, string topicPath, string content);
-    public Task SendMessage(ServiceBusConnectionString connectionString, string topicPath, AzureMessage message);
+    public Task SendMessage(ServiceBusConnectionString connectionString, string topicPath, ServiceBusMessage message);
     Task<IList<Message>> GetMessages(ServiceBusConnectionString connectionString, string queueName);
     Task<IList<Message>> GetDlqMessages(ServiceBusConnectionString connectionString, string queueName);
     Task DeadletterMessage(ServiceBusConnectionString connectionString, string queue, Message message);

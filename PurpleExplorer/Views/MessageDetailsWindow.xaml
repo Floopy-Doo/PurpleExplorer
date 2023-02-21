@@ -5,6 +5,7 @@
         mc:Ignorable="d" d:DesignWidth="780" d:DesignHeight="630"
         x:Class="PurpleExplorer.Views.MessageDetailsWindow"
         xmlns:vm="clr-namespace:PurpleExplorer.ViewModels;assembly=PurpleExplorer"
+        xmlns:models="clr-namespace:PurpleExplorer.Models"
         Title="Message Details" Icon="/Assets/avalonia-logo.ico"
         Width="680" Height="630"
         WindowStartupLocation="CenterOwner">
@@ -112,7 +113,46 @@
 
                 <TextBlock Grid.Row="8" Grid.Column="0" Classes="left" Text="Enqueued Time (UTC)" />
                 <TextBlock Grid.Row="8" Grid.Column="1" Classes="right" Text="{Binding Message.EnqueueTimeUtc}" />
+                
             </Grid>
+
+            <!-- <ItemsControl Items="{Binding Message.CustomProperties}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"> -->
+            <!--     <ItemsControl.ItemTemplate> -->
+            <!-- -->
+            <!--         <DataTemplate DataType="{x:Type models:MessageCustomProperty}"> -->
+            <!--             <StackPanel Orientation="Horizontal"> -->
+            <!--                 <Border Margin="0 0 0 10" BorderThickness="0 0 2 0 "> -->
+            <!--                 <TextBlock  TextWrapping="Wrap" HorizontalAlignment="Stretch" -->
+            <!--                            VerticalAlignment="Stretch" Text="{Binding Header }" /> -->
+            <!--                 </Border> -->
+            <!--                 <TextBlock Margin="15 0 0 10" TextWrapping="Wrap" -->
+            <!--                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch" -->
+            <!--                            Text="{Binding Value }" /> -->
+            <!--             </StackPanel> -->
+            <!--         </DataTemplate> -->
+            <!--     </ItemsControl.ItemTemplate> -->
+            <!-- </ItemsControl> -->
+            <!-- -->
+            
+            <TextBlock Margin="5 10">Custom Message Headers</TextBlock>
+            <ItemsControl Items="{Binding Message.CustomProperties}" Margin="5,0,5,0" Grid.IsSharedSizeScope="True">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="5,0,5,0" HorizontalAlignment="Stretch">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition SharedSizeGroup="Column0" Width="Auto"/>
+                                <ColumnDefinition SharedSizeGroup="Column1" Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition MinHeight="20"></RowDefinition>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding Header}" HorizontalAlignment="Stretch"/>
+                            <TextBox Grid.Column="1" Text="{Binding Value}"  HorizontalAlignment="Stretch"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            
         </StackPanel>
     </ScrollViewer>
 </Window>

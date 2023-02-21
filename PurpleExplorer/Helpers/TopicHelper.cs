@@ -1,7 +1,6 @@
-﻿using System;
-using Microsoft.Azure.ServiceBus;
-using Microsoft.Azure.ServiceBus.Core;
-using Microsoft.Azure.ServiceBus.Management;
+﻿namespace PurpleExplorer.Helpers;
+
+using System;
 using PurpleExplorer.Models;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,9 +8,10 @@ using System.Text;
 using System.Threading.Tasks;
 using AvaloniaEdit.Utils;
 using Message = PurpleExplorer.Models.Message;
-using AzureMessage = Microsoft.Azure.ServiceBus.Message;
 
-namespace PurpleExplorer.Helpers;
+using Azure.Messaging.ServiceBus;
+using Azure.Messaging.ServiceBus.Administration;
+using ReactiveUI;
 
 public class TopicHelper : BaseHelper, ITopicHelper
 {
@@ -26,92 +26,48 @@ public class TopicHelper : BaseHelper, ITopicHelper
     {
         var client = GetManagementClient(connectionString);
         var topics = await GetTopicsWithSubscriptions(client);
-        await client.CloseAsync();
         return topics;
     }
 
-    private async Task<ServiceBusTopic> CreateTopicWithSubscriptions(ManagementClient client, TopicDescription topicDescription)
+    private async Task<ServiceBusTopic> CreateTopicWithSubscriptions(ServiceBusAdministrationClient client, TopicProperties topicDescription)
     {
         var topic = new ServiceBusTopic(topicDescription);
-        var subscriptions = await GetSubscriptions(client, topicDescription.Path);
+        var subscriptions = await GetSubscriptions(client, topicDescription.Name);
         topic.AddSubscriptions(subscriptions.ToArray());
         return topic;
     }
 
-    private async Task<List<ServiceBusTopic>> GetTopicsWithSubscriptions(ManagementClient client)
+    private async Task<List<ServiceBusTopic>> GetTopicsWithSubscriptions(ServiceBusAdministrationClient client)
     {
-        var topicDescriptions = new List<TopicDescription>();
+        var topics = new List<ServiceBusTopic>();
         var numberOfPages = _appSettings.TopicListFetchCount / MaxRequestItemsPerPage;
         var remainder = _appSettings.TopicListFetchCount % (numberOfPages * MaxRequestItemsPerPage);
 
-        for (int pageCount = 0; pageCount < numberOfPages; pageCount++)
+        var pages = client.GetTopicsAsync()
+            .AsPages(pageSizeHint: MaxRequestItemsPerPage);
+
+        await foreach (var page in pages)
         {
-            var numberToSkip = MaxRequestItemsPerPage * pageCount;
-            var page = await client.GetTopicsAsync(MaxRequestItemsPerPage, numberToSkip);
-            if (page.Any())
+            foreach (var topicProperty in page.Values)
             {
-                topicDescriptions.AddRange(page);
-            }
-            else
-            {
-                return (await Task.WhenAll(topicDescriptions
-                    .Select(async topic => await CreateTopicWithSubscriptions(client, topic)))).ToList();
+                var topic = await CreateTopicWithSubscriptions(client, topicProperty);
+                topics.Add(topic);
             }
         }
 
-        if (remainder > 0)
-        {
-            var numberAlreadyFetched = numberOfPages > 0
-                ? MaxRequestItemsPerPage * numberOfPages
-                : 0;
-            var remainingItems = await client.GetTopicsAsync(
-                remainder,
-                numberAlreadyFetched);
-            topicDescriptions.AddRange(remainingItems);
-        }
-
-        var topics = await Task.WhenAll(topicDescriptions
-            .Select(async topic => await CreateTopicWithSubscriptions(client, topic)));
-        return topics.ToList();
-    }
-
-    public async Task<ServiceBusTopic> GetTopic(ServiceBusConnectionString connectionString, string topicPath,
-        bool retrieveSubscriptions)
-    {
-        var client = GetManagementClient(connectionString);
-        var busTopics = await client.GetTopicAsync(topicPath);
-        var newTopic = new ServiceBusTopic(busTopics);
-
-        if (retrieveSubscriptions)
-        {
-            var subscriptions = await GetSubscriptions(client, newTopic.Name);
-            newTopic.AddSubscriptions(subscriptions.ToArray());
-        }
-        
-        await client.CloseAsync();
-        return newTopic;
-    }
-
-    public async Task<ServiceBusSubscription> GetSubscription(ServiceBusConnectionString connectionString,
-        string topicPath, string subscriptionName)
-    {
-        var client = GetManagementClient(connectionString);
-        var runtimeInfo = await client.GetSubscriptionRuntimeInfoAsync(topicPath, subscriptionName);
-        await client.CloseAsync();
-
-        return new ServiceBusSubscription(runtimeInfo);
+        return topics;
     }
 
     private async Task<IList<ServiceBusSubscription>> GetSubscriptions(
-        ManagementClient client,
+        ServiceBusAdministrationClient client,
         string topicPath)
     {
         IList<ServiceBusSubscription> subscriptions = new List<ServiceBusSubscription>();
-        var topicSubscription = await client.GetSubscriptionsRuntimeInfoAsync(topicPath);
+        var topicSubscription = client.GetSubscriptionsRuntimePropertiesAsync(topicPath).AsPages();
 
-        foreach (var sub in topicSubscription)
+        await foreach (var sub in topicSubscription)
         {
-            subscriptions.Add(new ServiceBusSubscription(sub));
+            subscriptions.AddRange(sub.Values.Select(x => new ServiceBusSubscription(x)));
         }
 
         return subscriptions;
@@ -121,61 +77,79 @@ public class TopicHelper : BaseHelper, ITopicHelper
         string topicName,
         string subscriptionName)
     {
-        var path = EntityNameHelper.FormatSubscriptionPath(topicName, subscriptionName);
-
-        var messageReceiver = GetMessageReceiver(connectionString, path, ReceiveMode.PeekLock);
-        var subscriptionMessages = await messageReceiver.PeekAsync(_appSettings.TopicMessageFetchCount);
-        await messageReceiver.CloseAsync();
-
+        await using var client = this.GetBusClient(connectionString);
+        await using var receiver = client.CreateReceiver(
+            topicName,
+            subscriptionName,
+            new ServiceBusReceiverOptions { ReceiveMode = ServiceBusReceiveMode.PeekLock });
+        
+        var subscriptionMessages = await receiver.PeekMessagesAsync(_appSettings.TopicMessageFetchCount);
         var result = subscriptionMessages.Select(message => new Message(message, false)).ToList();
         return result;
     }
 
-    public async Task<IList<Message>> GetDlqMessages(ServiceBusConnectionString connectionString, string topic,
+    public async Task<IList<Message>> GetDlqMessages(
+        ServiceBusConnectionString connectionString,
+        string topic,
         string subscription)
     {
-        var path = EntityNameHelper.FormatSubscriptionPath(topic, subscription);
-        var deadletterPath = EntityNameHelper.FormatDeadLetterPath(path);
+        await using var client = this.GetBusClient(connectionString);
+        await using var receiver = client.CreateReceiver(
+            topic,
+            subscription,
+            new ServiceBusReceiverOptions
+            {
+                ReceiveMode = ServiceBusReceiveMode.PeekLock,
+                SubQueue = SubQueue.DeadLetter,
+            });
 
-        var receiver = GetMessageReceiver(connectionString, deadletterPath, ReceiveMode.PeekLock);
-        var receivedMessages = await receiver.PeekAsync(_appSettings.TopicMessageFetchCount);
+        var receivedMessages = await receiver.PeekMessagesAsync(_appSettings.TopicMessageFetchCount);
         await receiver.CloseAsync();
 
         var result = receivedMessages.Select(message => new Message(message, true)).ToList();
         return result;
     }
 
-    public async Task<NamespaceInfo> GetNamespaceInfo(ServiceBusConnectionString connectionString)
+    public async Task<NamespaceProperties> GetNamespaceInfo(ServiceBusConnectionString connectionString)
     {
         var client = GetManagementClient(connectionString);
-        return await client.GetNamespaceInfoAsync();
+        return await client.GetNamespacePropertiesAsync();
     }
 
     public async Task SendMessage(ServiceBusConnectionString connectionString, string topicPath, string content)
     {
-        var message = new AzureMessage { Body = Encoding.UTF8.GetBytes(content) };
+        var message = new  ServiceBusMessage(body:Encoding.UTF8.GetBytes(content));
         await SendMessage(connectionString, topicPath, message);
     }
 
-    public async Task SendMessage(ServiceBusConnectionString connectionString, string topicPath, AzureMessage message)
+    public async Task SendMessage(
+        ServiceBusConnectionString connectionString,
+        string topicPath,
+        ServiceBusMessage message)
     {
-        var topicClient = GetTopicClient(connectionString, topicPath);
-        await topicClient.SendAsync(message);
-        await topicClient.CloseAsync();
+        await using (var topicClient = this.GetBusClient(connectionString))
+        {
+            topicClient.CreateSender(topicPath).SendMessageAsync(message);
+        }
     }
 
     public async Task DeleteMessage(ServiceBusConnectionString connectionString, string topicPath,
         string subscriptionPath,
         Message message, bool isDlq)
     {
-        var path = EntityNameHelper.FormatSubscriptionPath(topicPath, subscriptionPath);
-        path = isDlq ? EntityNameHelper.FormatDeadLetterPath(path) : path;
-
-        var receiver = GetMessageReceiver(connectionString, path, ReceiveMode.PeekLock);
-
+        await using var client = this.GetBusClient(connectionString);
+        await using var receiver = client.CreateReceiver(
+            topicPath,
+            subscriptionPath,
+            new ServiceBusReceiverOptions
+            {
+                ReceiveMode = ServiceBusReceiveMode.PeekLock,
+                SubQueue = isDlq ? SubQueue.DeadLetter : SubQueue.None,
+            });
+        
         while (true)
         {
-            var messages = await receiver.ReceiveAsync(_appSettings.TopicMessageFetchCount);
+            var messages = await receiver.ReceiveMessagesAsync(_appSettings.TopicMessageFetchCount);
             if (messages == null || messages.Count == 0)
             {
                 break;
@@ -184,27 +158,31 @@ public class TopicHelper : BaseHelper, ITopicHelper
             var foundMessage = messages.FirstOrDefault(m => m.MessageId.Equals(message.MessageId));
             if (foundMessage != null)
             {
-                await receiver.CompleteAsync(foundMessage.SystemProperties.LockToken);
+                await receiver.CompleteMessageAsync(foundMessage);
                 break;
             }
         }
-
-        await receiver.CloseAsync();
     }
 
     public async Task<long> PurgeMessages(ServiceBusConnectionString connectionString, string topicPath,
         string subscriptionPath,
         bool isDlq)
     {
-        var path = EntityNameHelper.FormatSubscriptionPath(topicPath, subscriptionPath);
-        path = isDlq ? EntityNameHelper.FormatDeadLetterPath(path) : path;
+        await using var client = this.GetBusClient(connectionString);
+        await using var receiver = client.CreateReceiver(
+            topicPath,
+            subscriptionPath,
+            new ServiceBusReceiverOptions
+            {
+                ReceiveMode = ServiceBusReceiveMode.ReceiveAndDelete,
+                SubQueue = isDlq ? SubQueue.DeadLetter : SubQueue.None,
+            });
 
         long purgedCount = 0;
-        var receiver = GetMessageReceiver(connectionString, path, ReceiveMode.ReceiveAndDelete);
         var operationTimeout = TimeSpan.FromSeconds(5);
         while (true)
         {
-            var messages = await receiver.ReceiveAsync(_appSettings.TopicMessageFetchCount, operationTimeout);
+            var messages = await receiver.ReceiveMessagesAsync(_appSettings.TopicMessageFetchCount, operationTimeout);
             if (messages == null || messages.Count == 0)
             {
                 break;
@@ -213,60 +191,57 @@ public class TopicHelper : BaseHelper, ITopicHelper
             purgedCount += messages.Count;
         }
 
-        await receiver.CloseAsync();
         return purgedCount;
     }
 
     public async Task<long> TransferDlqMessages(ServiceBusConnectionString connectionString, string topicPath,
         string subscriptionPath)
     {
-        var path = EntityNameHelper.FormatSubscriptionPath(topicPath, subscriptionPath);
-        path = EntityNameHelper.FormatDeadLetterPath(path);
+        await using var client = this.GetBusClient(connectionString);
+        await using var receiver = client.CreateReceiver(
+            topicPath,
+            subscriptionPath,
+            new ServiceBusReceiverOptions
+            {
+                ReceiveMode = ServiceBusReceiveMode.ReceiveAndDelete,
+                SubQueue = SubQueue.DeadLetter,
+            });
+        await using var sender = client.CreateSender(topicPath);
 
         long transferredCount = 0;
-        MessageReceiver receiver = null;
-        TopicClient sender = null;
-        try
+        var operationTimeout = TimeSpan.FromSeconds(5);
+        while (true)
         {
-            receiver = GetMessageReceiver(connectionString, path, ReceiveMode.ReceiveAndDelete);
-            sender = GetTopicClient(connectionString, topicPath);
-            var operationTimeout = TimeSpan.FromSeconds(5);
-            while (true)
+            var messages = await receiver.ReceiveMessagesAsync(_appSettings.TopicMessageFetchCount, operationTimeout);
+            if (messages == null || messages.Count == 0)
             {
-                var messages = await receiver.ReceiveAsync(_appSettings.TopicMessageFetchCount, operationTimeout);
-                if (messages == null || messages.Count == 0)
-                {
-                    break;
-                }
-
-                await sender.SendAsync(messages);
-
-                transferredCount += messages.Count;
+                break;
             }
-        }
-        finally
-        {
-            if (receiver != null)
-                await receiver.CloseAsync();
 
-            if (sender != null)
-                await sender.CloseAsync();
+            await sender.SendMessagesAsync(messages.Select(x => new ServiceBusMessage(x)));
+
+            transferredCount += messages.Count;
         }
+        
 
         return transferredCount;
     }
 
-    private async Task<AzureMessage> PeekDlqMessageBySequenceNumber(ServiceBusConnectionString connectionString,
+    private async Task<ServiceBusReceivedMessage> PeekDlqMessageBySequenceNumber(ServiceBusConnectionString connectionString,
         string topicPath,
         string subscriptionPath, long sequenceNumber)
     {
-        var path = EntityNameHelper.FormatSubscriptionPath(topicPath, subscriptionPath);
-        var deadletterPath = EntityNameHelper.FormatDeadLetterPath(path);
-
-        var receiver = GetMessageReceiver(connectionString, deadletterPath, ReceiveMode.PeekLock);
-        var azureMessage = await receiver.PeekBySequenceNumberAsync(sequenceNumber);
-        await receiver.CloseAsync();
-
+        await using var client = this.GetBusClient(connectionString);
+        await using var receiver = client.CreateReceiver(
+            topicPath,
+            subscriptionPath,
+            new ServiceBusReceiverOptions
+            {
+                ReceiveMode = ServiceBusReceiveMode.PeekLock,
+                SubQueue = SubQueue.DeadLetter,
+            });
+        
+        var azureMessage = await receiver.PeekMessageAsync(sequenceNumber);
         return azureMessage;
     }
 
@@ -274,12 +249,13 @@ public class TopicHelper : BaseHelper, ITopicHelper
         string subscriptionPath,
         Message message)
     {
-        var azureMessage = await PeekDlqMessageBySequenceNumber(connectionString, topicPath, subscriptionPath,
+        var azureMessage = await this.PeekDlqMessageBySequenceNumber(
+            connectionString,
+            topicPath,
+            subscriptionPath,
             message.SequenceNumber);
-        var clonedMessage = azureMessage.CloneMessage();
 
-        await SendMessage(connectionString, topicPath, clonedMessage);
-
+        await SendMessage(connectionString, topicPath, new ServiceBusMessage(azureMessage));
         await DeleteMessage(connectionString, topicPath, subscriptionPath, message, true);
     }
 
@@ -287,13 +263,18 @@ public class TopicHelper : BaseHelper, ITopicHelper
         string subscriptionPath,
         Message message)
     {
-        var path = EntityNameHelper.FormatSubscriptionPath(topicPath, subscriptionPath);
-
-        var receiver = GetMessageReceiver(connectionString, path, ReceiveMode.PeekLock);
+        await using var client = this.GetBusClient(connectionString);
+        await using var receiver = client.CreateReceiver(
+            topicPath,
+            subscriptionPath,
+            new ServiceBusReceiverOptions
+            {
+                ReceiveMode = ServiceBusReceiveMode.PeekLock,
+            });
 
         while (true)
         {
-            var messages = await receiver.ReceiveAsync(_appSettings.TopicMessageFetchCount);
+            var messages = await receiver.ReceiveMessagesAsync(_appSettings.TopicMessageFetchCount);
             if (messages == null || messages.Count == 0)
             {
                 break;
@@ -302,7 +283,7 @@ public class TopicHelper : BaseHelper, ITopicHelper
             var foundMessage = messages.FirstOrDefault(m => m.MessageId.Equals(message.MessageId));
             if (foundMessage != null)
             {
-                await receiver.DeadLetterAsync(foundMessage.SystemProperties.LockToken);
+                await receiver.DeadLetterMessageAsync(foundMessage);
                 break;
             }
         }

@@ -1,8 +1,12 @@
 using System;
 using System.Text;
-using AzureMessage = Microsoft.Azure.ServiceBus.Message;
 
 namespace PurpleExplorer.Models;
+
+using System.Collections.Generic;
+using System.Linq;
+using Azure.Messaging.ServiceBus;
+using ReactiveUI;
 
 public class Message
 {
@@ -17,23 +21,26 @@ public class Message
     public TimeSpan TimeToLive { get; set; }
     public DateTime EnqueueTimeUtc { get; set; }
     public string DeadLetterReason { get; set; }
+    public IReadOnlyList<MessageCustomProperty> CustomProperties { get; set; }
     public bool IsDlq { get; }
-        
-    public Message(AzureMessage azureMessage, bool isDlq)
+
+
+    public Message(ServiceBusReceivedMessage azureMessage, bool isDlq)
     {
         this.Content = azureMessage.Body is not null ? Encoding.UTF8.GetString(azureMessage.Body) : string.Empty;
         this.MessageId = azureMessage.MessageId;
         this.CorrelationId = azureMessage.CorrelationId;
-        this.DeliveryCount = azureMessage.SystemProperties.DeliveryCount;
+        this.DeliveryCount = azureMessage.DeliveryCount;
         this.ContentType = azureMessage.ContentType;
-        this.Label = azureMessage.Label;
-        this.SequenceNumber = azureMessage.SystemProperties.SequenceNumber;
-        this.Size = azureMessage.Size;
+        this.Label = azureMessage.Subject;
+        this.SequenceNumber = azureMessage.SequenceNumber;
+        this.Size = -1;
         this.TimeToLive = azureMessage.TimeToLive;
         this.IsDlq = isDlq;
-        this.EnqueueTimeUtc = azureMessage.SystemProperties.EnqueuedTimeUtc;
-        this.DeadLetterReason = azureMessage.UserProperties.ContainsKey("DeadLetterReason")
-            ? azureMessage.UserProperties["DeadLetterReason"].ToString()
-            : string.Empty;
+        this.EnqueueTimeUtc = azureMessage.EnqueuedTime.UtcDateTime;
+        this.DeadLetterReason = azureMessage.DeadLetterReason;
+        this.CustomProperties = azureMessage.ApplicationProperties.Select(x => new MessageCustomProperty(x.Key, x.Value)).ToList();
     }
 }
+
+public record MessageCustomProperty (string Header, object Value);

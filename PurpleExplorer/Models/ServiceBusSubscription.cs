@@ -1,6 +1,6 @@
-using Microsoft.Azure.ServiceBus.Management;
-
 namespace PurpleExplorer.Models;
+
+using Azure.Messaging.ServiceBus.Administration;
 
 public class ServiceBusSubscription : MessageCollection
 {
@@ -8,8 +8,8 @@ public class ServiceBusSubscription : MessageCollection
        
     public ServiceBusTopic Topic { get; set; }
 
-    public ServiceBusSubscription(SubscriptionRuntimeInfo subscription)
-        : base(subscription.MessageCountDetails.ActiveMessageCount, subscription.MessageCountDetails.DeadLetterMessageCount)
+    public ServiceBusSubscription(SubscriptionRuntimeProperties subscription)
+        : base(subscription.ActiveMessageCount, subscription.DeadLetterMessageCount)
     {
         Name = subscription.SubscriptionName;
     }
