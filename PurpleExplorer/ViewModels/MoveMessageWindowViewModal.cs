@@ -5,10 +5,7 @@
     using System.Threading.Tasks;
     using Avalonia.Controls;
     using Helpers;
-    using MessageBox.Avalonia.Enums;
-    using Models;
     using ReactiveUI;
-    using Splat;
 
     public class MoveMessageWindowViewModal : DialogViewModelBase
     {
@@ -34,20 +31,15 @@
 
         public async Task MoveMessage(Window window)
         {
+
             if (string.IsNullOrEmpty(this.QueueTopicName))
             {
                 await MessageBoxHelper.ShowError("Please enter a queue/topic to be sent to");
                 return;
             }
-
-            var result = await MessageBoxHelper.ShowConfirmation(
-                "Transfer to Queue/Topic",
-                $"Transfer message to queue/topic {this.QueueTopicName}");
-            if (result is ButtonResult.Yes or ButtonResult.Ok)
-            {
-                this.Cancel = false;
-                window.Close();
-            }
+            
+            this.Cancel = false;
+            window.Close();
         }
     }
 }

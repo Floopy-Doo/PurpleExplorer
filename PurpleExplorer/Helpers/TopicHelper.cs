@@ -313,6 +313,7 @@ public class TopicHelper : BaseHelper, ITopicHelper
         while (true)
         {
             var messages = await receiver.ReceiveMessagesAsync(this._appSettings.TopicMessageFetchCount, operationTimeout);
+            messagesPeekedButNotProcessed.AddRange(messages.Where(x => x.MessageId.Equals(messageId) == false));
             
             var foundMessage = messages.FirstOrDefault(m => m.MessageId.Equals(messageId));
             if (foundMessage != null)
@@ -321,8 +322,6 @@ public class TopicHelper : BaseHelper, ITopicHelper
                 await receiver.CompleteMessageAsync(foundMessage);
                 break;
             }
-            
-            messagesPeekedButNotProcessed.AddRange(messages.Where(x => x.MessageId.Equals(messageId) == false));
         }
         
         foreach (var message in messagesPeekedButNotProcessed)

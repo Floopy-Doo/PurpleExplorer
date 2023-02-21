@@ -6,7 +6,7 @@
         mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="480"
         x:Class="PurpleExplorer.Views.MoveMessageWindow"
         Title="Send message" Icon="/Assets/avalonia-logo.ico"
-        Width="620" Height="480"
+        Width="620" Height="80"
         WindowStartupLocation="CenterOwner">
 
     <Design.DataContext>
@@ -32,7 +32,7 @@
                     VerticalAlignment="Center"
                     Command="{Binding MoveMessage}"
                     CommandParameter="{Binding $parent[Window]}">
-                Save Message
+                Move Message
                 <Button.IsEnabled>
                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                         <Binding Converter="{x:Static StringConverters.IsNotNullOrEmpty}" Path="QueueTopicName" />

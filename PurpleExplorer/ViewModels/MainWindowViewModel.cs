@@ -422,6 +422,8 @@ public class MainWindowViewModel : ViewModelBase
     {
         try
         {
+            this.LoggingService.Log($"Transferring message {messageId} to topic/queue {destinationQueueTopic}...");
+            
             switch (originating)
             {
                 case ServiceBusSubscription subscription:
@@ -440,6 +442,8 @@ public class MainWindowViewModel : ViewModelBase
                         destinationQueueTopic);
                     break;
             }
+                                                                                                                  
+            this.LoggingService.Log($"Transferred message {messageId} to topic/queue {destinationQueueTopic}");
 
             await this.Refresh();
         }
