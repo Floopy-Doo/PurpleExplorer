@@ -15,6 +15,7 @@ using Message = PurpleExplorer.Models.Message;
 
 namespace PurpleExplorer.ViewModels;
 
+using System.Collections.Generic;
 using Azure.Messaging.ServiceBus;
 
 public class MainWindowViewModel : ViewModelBase
@@ -110,6 +111,7 @@ public class MainWindowViewModel : ViewModelBase
         get => _queueLevelActionEnabled;
         set => this.RaiseAndSetIfChanged(ref _queueLevelActionEnabled, value);
     }
+
     public MainWindowViewModel()
     {
         _loggingService = Locator.Current.GetService<ILoggingService>();
@@ -401,6 +403,52 @@ public class MainWindowViewModel : ViewModelBase
         }
         LoggingService.Log($"Transferred {transferCount} messages in {dlqPath}");
     }
+
+
+    internal IReadOnlyList<string> GetMoveMessageToQueueTopicList()
+    {
+        return this
+            .ConnectedServiceBuses
+            .SelectMany(
+                serviceBus =>
+                {   var queues = serviceBus.Queues.Select(queue => queue.Name);
+                    var topics = serviceBus.Topics.Select(topic => topic.Name);
+                    return queues.Union(topics);
+                })
+            .ToList();
+    }
+
+    internal async Task MoveMessageTo(string messageId, MessageCollection originating, string destinationQueueTopic)
+    {
+        try
+        {
+            switch (originating)
+            {
+                case ServiceBusSubscription subscription:
+                    await this._topicHelper.MoveMessage(
+                        messageId,
+                        subscription.Topic.ServiceBus.ConnectionString,
+                        subscription.Topic.Name,
+                        subscription.Name,
+                        destinationQueueTopic);
+                    break;
+                case ServiceBusQueue queue:
+                    await this._queueHelper.MoveMessage(
+                        messageId,
+                        queue.ServiceBus.ConnectionString,
+                        queue.Name,
+                        destinationQueueTopic);
+                    break;
+            }
+
+            await this.Refresh();
+        }
+        catch (Exception ex)
+        {
+            await MessageBoxHelper.ShowError($"Failed to Move Message due to exception:\n{ex.Message}");
+        }
+    }
+
 
     public async void PurgeMessages(string isDlqText)
     {

@@ -67,6 +67,16 @@
                         <TextBlock VerticalAlignment="Center">Resubmit back to topic</TextBlock>
                     </StackPanel>
                 </Button>
+                <Button Name="MoveTo" 
+                        Command="{Binding MoveTo}"
+                        CommandParameter="{Binding $parent[Window]}"
+                        IsVisible="{Binding !Message.IsDlq}"
+                        Classes="topButton">
+                    <StackPanel Orientation="Horizontal">
+                        <DrawingPresenter Drawing="{DynamicResource Material.EmailSend}" />
+                        <TextBlock VerticalAlignment="Center">Send message to queue/topic</TextBlock>
+                    </StackPanel>
+                </Button>
             </DockPanel>
 
             <Grid MinHeight="600" VerticalAlignment="Top" ShowGridLines="True">
@@ -147,7 +157,7 @@
                                 <RowDefinition MinHeight="20"></RowDefinition>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Column="0" Text="{Binding Header}" HorizontalAlignment="Stretch"/>
-                            <TextBox Grid.Column="1" Text="{Binding Value}"  HorizontalAlignment="Stretch"/>
+                            <TextBox Grid.Column="1" Text="{Binding Value}"  HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

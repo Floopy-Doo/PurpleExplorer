@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:viewModels="clr-namespace:PurpleExplorer.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="480"
+        x:Class="PurpleExplorer.Views.MoveMessageWindow"
+        Title="Send message" Icon="/Assets/avalonia-logo.ico"
+        Width="620" Height="480"
+        WindowStartupLocation="CenterOwner">
+
+    <Design.DataContext>
+        <viewModels:MoveMessageWindowViewModal />
+    </Design.DataContext>
+
+    <Grid Margin="5">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="40" />
+        </Grid.RowDefinitions>
+
+        <ComboBox HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  FontFamily="Microsoft YaHei,Simsun,苹方-简,宋体-简"
+                  Items="{Binding Queues}" SelectedItem="{Binding QueueTopicName, Mode=TwoWay}" />
+
+        <!-- <TextBox MinHeight="180" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" -->
+        <!--          FontFamily="Microsoft YaHei,Simsun,苹方-简,宋体-简" -->
+        <!--          TextWrapping="Wrap" Text="{Binding Path=Message, Mode=TwoWay}" /> -->
+
+        <StackPanel Grid.Row="1" Margin="0,5,0,5" Orientation="Horizontal" HorizontalAlignment="Stretch">
+            <Button MinWidth="200" Height="30" Margin="5,0,5,0" HorizontalAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    Command="{Binding MoveMessage}"
+                    CommandParameter="{Binding $parent[Window]}">
+                Save Message
+                <Button.IsEnabled>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Converter="{x:Static StringConverters.IsNotNullOrEmpty}" Path="QueueTopicName" />
+                    </MultiBinding>
+                </Button.IsEnabled>
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>

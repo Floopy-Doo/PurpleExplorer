@@ -290,4 +290,44 @@ public class TopicHelper : BaseHelper, ITopicHelper
 
         await receiver.CloseAsync();
     }
+
+    public async Task MoveMessage(
+        string messageId,
+        ServiceBusConnectionString connectionString, 
+        string topicPath,
+        string subscriptionPath,
+        string destinationQueueTopic)
+    {
+        await using var client = this.GetBusClient(connectionString);
+        await using var receiver = client.CreateReceiver(
+            topicPath,
+            subscriptionPath,
+            new ServiceBusReceiverOptions
+            {
+                ReceiveMode = ServiceBusReceiveMode.PeekLock,
+            });
+        await using var sender = client.CreateSender(destinationQueueTopic);
+
+        var operationTimeout = TimeSpan.FromSeconds(5);
+        var messagesPeekedButNotProcessed = new List<ServiceBusReceivedMessage>();
+        while (true)
+        {
+            var messages = await receiver.ReceiveMessagesAsync(this._appSettings.TopicMessageFetchCount, operationTimeout);
+            
+            var foundMessage = messages.FirstOrDefault(m => m.MessageId.Equals(messageId));
+            if (foundMessage != null)
+            {
+                await sender.SendMessageAsync(new ServiceBusMessage(foundMessage));
+                await receiver.CompleteMessageAsync(foundMessage);
+                break;
+            }
+            
+            messagesPeekedButNotProcessed.AddRange(messages.Where(x => x.MessageId.Equals(messageId) == false));
+        }
+        
+        foreach (var message in messagesPeekedButNotProcessed)
+        {
+            await receiver.AbandonMessageAsync(message);
+        }
+    }
 }

@@ -20,4 +20,5 @@ public interface IQueueHelper
     Task ResubmitDlqMessage(ServiceBusConnectionString connectionString, string queue, Message message);
     Task<long> PurgeMessages(ServiceBusConnectionString connectionString, string queue, bool isDlq);
     Task<long> TransferDlqMessages(ServiceBusConnectionString connectionString, string queue);
+    Task MoveMessage(string messageId, ServiceBusConnectionString connectionString, string queueName, string destinationQueueTopic);
 }

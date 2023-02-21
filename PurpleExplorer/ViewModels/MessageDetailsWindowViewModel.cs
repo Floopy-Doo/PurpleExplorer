@@ -8,6 +8,10 @@ using Splat;
 
 namespace PurpleExplorer.ViewModels;
 
+using System;
+using System.Collections.Generic;
+using Views;
+
 public class MessageDetailsWindowViewModel : ViewModelBase
 {
     private readonly ITopicHelper _topicHelper;
@@ -15,13 +19,15 @@ public class MessageDetailsWindowViewModel : ViewModelBase
     private readonly ILoggingService _loggingService;
 
     public Message Message { get; set; }
-    public ServiceBusSubscription Subscription { get; set; }
-    public ServiceBusQueue Queue { get; set; }
+    public ServiceBusSubscription? Subscription { get; set; }
+    public ServiceBusQueue? Queue { get; set; }
     public ServiceBusConnectionString ConnectionString { get; set; }
+    public Func<string, MessageCollection, string, Task> MoveMessageTo { get; set; }
+    public Func<IReadOnlyList<string>> GetMoveMessageToQueueTopicList { get; set; }
 
     public MessageDetailsWindowViewModel(ITopicHelper topicHelper = null,
-        ILoggingService loggingService = null,
-        IQueueHelper queueHelper = null)
+                                         ILoggingService loggingService = null,
+                                         IQueueHelper queueHelper = null)
     {
         _loggingService = loggingService ?? Locator.Current.GetService<ILoggingService>();
         _topicHelper = topicHelper ?? Locator.Current.GetService<ITopicHelper>();
@@ -138,5 +144,23 @@ public class MessageDetailsWindowViewModel : ViewModelBase
         }
 
         _loggingService.Log($"Sent message: {Message.MessageId} to dead-letter");
+    }
+
+    public async Task MoveTo(Window window)
+    {
+
+        var availableQueuesAndTopics = this.GetMoveMessageToQueueTopicList();
+        var viewModel = new MoveMessageWindowViewModal(availableQueuesAndTopics);
+        var resultViewModel =
+            await ModalWindowHelper.ShowModalWindow<MoveMessageWindow, MoveMessageWindowViewModal>(viewModel);
+
+        if (resultViewModel.Cancel)
+        {
+            return; 
+        }
+
+        var originatingQueueOrSubscription = (MessageCollection?)this.Queue ?? (MessageCollection)this.Subscription;
+        await this.MoveMessageTo(this.Message.MessageId, originatingQueueOrSubscription, resultViewModel.QueueTopicName);
+        window.Close();
     }
 }

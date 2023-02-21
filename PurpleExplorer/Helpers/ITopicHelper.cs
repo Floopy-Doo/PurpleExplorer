@@ -22,4 +22,11 @@ public interface ITopicHelper
         Message message);
     public Task DeadletterMessage(ServiceBusConnectionString connectionString, string topicPath, string subscriptionPath,
         Message message);
+
+    public Task MoveMessage(
+        string messageId,
+        ServiceBusConnectionString connectionString,
+        string subscriptionTopic,
+        string subscriptionName,
+        string destinationQueueTopic);
 }

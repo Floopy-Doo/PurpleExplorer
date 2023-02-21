@@ -38,7 +38,9 @@ public class MainWindow : Window
             Message = grid.SelectedItem as Message, 
             ConnectionString = mainWindowViewModel.ConnectionString,
             Subscription = mainWindowViewModel.CurrentSubscription,
-            Queue = mainWindowViewModel.CurrentQueue
+            Queue = mainWindowViewModel.CurrentQueue,
+            GetMoveMessageToQueueTopicList = mainWindowViewModel.GetMoveMessageToQueueTopicList,
+            MoveMessageTo = mainWindowViewModel.MoveMessageTo,
         };
 
         await ModalWindowHelper.ShowModalWindow<MessageDetailsWindow, MessageDetailsWindowViewModel>(viewModal);
